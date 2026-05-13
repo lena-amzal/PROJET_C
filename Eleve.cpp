@@ -1,63 +1,69 @@
- 
-#pragma warning( disable : 4996 ) 
-
- 
 #include <cstdlib>
 #include <vector>
 #include <iostream>
 #include <string>
+#include <ctime>
 #include "G2D.h"
  
- 
+	
 using namespace std;
+
+
+// ===================== CONSTANTES ECRANS =====================
+const int ECRAN_ACCUEIL = 0;
+const int INIT_PARTIE = 1;
+const int ECRAN_JEU = 2;
+const int ECRAN_GAMEOVER = 3;
+const int ECRAN_WIN = 4;
  
 struct _Heros
 {
 	string texture =
-		"[RRR  ]"
-		"[RRWR ]"
-		"[RRR  ]"
-		"[YY   ]"
-		"[YYY  ]"
-		"[YY YG]"
-		"[GG   ]"
-		"[CC   ]"
-		"[CC   ]"
-		"[C C  ]"
-		"[C C  ]";
-	V2 Size;
-	int IdTex; 
-	V2 Pos = V2(45,45);
-	V2 PosPixels;
-	V2 DirDeplacement;
-};
+		"[ YYYYY ]"
+		"[YYYYYYY]"
+		"[YYYY   ]"
+		"[YYYY   ]"
+		"[YYYYY  ]"
+		"[YYYYYYY]"
+		"[ YYYYY ]";
 
-struct Momie
-{
-	V2 Size;
-	V2 PosPixels;
-	V2 DirDeplacement;
-	string texture =
-		"[BBBB  ]"
-		"[BBBB  ]"
-		"[BBBB  ]"
-		"[BBBB  ]";
-};
-
-struct _Key
-{
-	string texture =
-		"[                      ]"
-		"[     W W         WWWW ]"
-		"[     W W        W    W]"
-		"[   WWWWWWWWWWWWWW    W]"
-  	    "[                W    W]"
-		"[                 WWWW ]";
-
+	string texture2 =
+		"[ YYYYY ]"
+		"[YYYYYYY]"
+		"[YYYYYYY]"
+		"[YYYYYYY]"
+		"[YYYYYYY]"
+		"[YYYYYYY]"
+		"[ YYYYY ]";
 
 	V2 Size;
 	int IdTex;
-	V2 Pos = V2(440, 450);
+	int IdTex2;
+	V2 Pos = V2(45,45);
+	int NbVies = 3;
+	int PiecesOr = 0;
+};
+
+
+struct _Fantome
+{
+	string texture =
+
+		"[  WWWWWWWWWWWW  ]"
+		"[ WWWWWWWWWWWWWW ]"
+		"[WWWWWWWWWWWWWWWW]"
+		"[WW  WWWWWWWW  WW]"
+		"[WW  W W  W W  WW]"
+		"[WW  WWWWWWWW  WW]"
+		"[ WWWWWWWWWWWWWW ]"
+		"[  WWW WW WW WWW ]";
+	V2 Size;
+	int IdTex;
+	V2 Pos;
+	V2 Dir;
+	bool Vivante = true;
+	bool Peur = false;
+	double TimePeur = 0;
 };
 
 
@@ -65,134 +71,568 @@ struct _Key
 struct GameData
 {
 
-    string Map =
-				 "MMMMMMMMMMMMMMM"
-				 "M M           M"
-				 "M M M MMM MMM M"
-				 "M   M       M M"
-				 "MMM M M MMM M M"
-				 "M   M M     M M"
-				 "M MMM MMM MMMMM"
-				 "M   M  M      M"
-				 "M M M  M M MM M"
-				 "M M M  M M M  M"
-				 "M M M MM M MMMM"
-				 "M M M    M    M"
-				 "M M M MMMMMMM M"
-				 "M M      M    M"
-				 "MMMMMMMMMMMMMMM";
+	string Map =
+		"MMMMMMMMMMMMMMM"
+		"M M           M"
+		"M M M MMM MMM M"
+		"M   M       M M"
+		"MMM M M MMM M M"
+		"M   M M     M M"
+		"M MMM MMM MMMMM"
+		"M   M  M      M"
+		"M M M  M M MM M"
+		"M M M  M M M  M"
+		"M M M MM M MMMM"
+		"M M M    M    M"
+		"M M M MMMMMMM M"
+		"M M      M    M"
+		"MMMMMMMMMMMMMMM";
 
-	// indique la présence d'un mur à la case (x,y)
-	 bool Mur(int x, int y) const  { return Map[(15 - y - 1)*15+x] == 'M'; }  // les fonctions const ne modifient pas les données
+	// indique la prÃ©sence d'un mur Ã  la case (x,y)
+	 bool Mur(int x, int y) const  { return Map[(15 - y - 1)*15+x] == 'M'; }  // les fonctions const ne modifient pas les donnÃ©es
 
 	int Lpix = 40;  // largeur en pixels des cases du labyrinthe
 
-	_Heros Heros;   // data du héros
-	_Key   Key;
-	Momie Momie1; // Momie numéro 1
-	Momie Momie2; // Momie numéro 2
-	Momie Momie3; // Momie numéro 3
+
+	_Heros Heros;   // data du hÃ©ros
+	_Fantome Fantome[3];
+	
+
+	int Ecran = ECRAN_ACCUEIL;
+	double TimeEcran = 0.0;
+	int FrameCount = 0;
+	vector<vector<bool>> Pieces;
+	vector<vector<bool>> Fruits;
+	bool ModeFear = false;
+	double TimeFear = 0;
+
+	bool Invincible = false;
+	double TimeInvincible = 0;
+
 
 	GameData() {}
 
 };
 
-bool collisionRectangles(V2 r1, int l1, int h1, V2 r2, int l2, int h2)
+
+// indique collision et position valide pour le hÃ©ros
+
+bool CollisionRectRect(V2 r1, V2 s1, V2 r2, V2 s2)
 {
-	if (r1.x + l1 < r2.x) return false;  // R1 à gauche de R2
-	if (r1.x > r2.x + l2) return false;  // R1 à droite de R2
-
-	if (r1.y + h1 < r2.y) return false; // R1 en dessous de R2
-	if (r1.y > r2.y + h2) return false; // R1 au dessus de R2
-
-	return true; // sinon il y a forcément une intersection entre les deux rectangles
+	if (r1.x + s1.x < r2.x) return false;
+	if (r1.x > r2.x + s2.x) return false;
+	if (r1.y + s1.y < r2.y) return false;
+	if (r1.y > r2.y + s2.y) return false;
+	return true;
 }
 
 
-bool DetectMur(const GameData & G, V2 pos, V2 size) {
-	for (int x = 0; x < 15; x++) {
-		for (int y = 0; y < 15; y++) {
-			if (G.Mur(x, y)) {
-				V2 posMur(x * G.Lpix, y * G.Lpix);
-				if (collisionRectangles(pos, size.x, size.y, posMur, G.Lpix, G.Lpix)) {
-					return true;
-				}
+bool PositionValide(const GameData& G, V2 pos, V2 taille)
+{
+	for (int x = 0; x < 15; x++)
+		for (int y = 0; y < 15; y++)
+			if (G.Mur(x, y))
+			{
+				V2 murPos = V2((float)(x * G.Lpix), (float)(y * G.Lpix));
+				V2 murSize = V2((float)G.Lpix, (float)G.Lpix);
+				if (CollisionRectRect(pos, taille, murPos, murSize))
+					return false;
+			}
+	return true;
+}
+
+//deplacement du Heros
+
+
+
+void GestionDeplacementHeros(GameData& G)
+{
+	V2 newPos = G.Heros.Pos;
+	int speed = 2;
+	bool enMouvement = false;
+
+	if (G2D::isKeyPressed(Key::LEFT)) { newPos.x -= speed; enMouvement = true; }
+	if (G2D::isKeyPressed(Key::RIGHT)) { newPos.x += speed; enMouvement = true; }
+	if (G2D::isKeyPressed(Key::UP)) { newPos.y += speed; enMouvement = true; }
+	if (G2D::isKeyPressed(Key::DOWN)) { newPos.y -= speed; enMouvement = true; }
+
+	V2 taille = V2(G.Heros.Size.x - 4, G.Heros.Size.y - 4);
+
+	if (PositionValide(G, newPos, taille))
+		G.Heros.Pos = newPos;
+
+	if (enMouvement)
+		G.FrameCount++;
+	else
+		G.FrameCount = 0; 
+}
+
+//Mort du heros
+
+void GestionMortHeros(GameData& G)
+{
+	G.Heros.Pos = V2(45, 45);
+	G.Heros.NbVies -= 1;
+}
+
+
+
+//collision Fantomes
+
+void GestionCollisionFantomes(GameData& G)
+{
+	for (int i = 0; i < 3; i++)
+	{
+		if (!G.Fantome[i].Vivante) continue;
+
+		if (CollisionRectRect(G.Heros.Pos, G.Heros.Size,
+			G.Fantome[i].Pos, G.Fantome[i].Size))
+		{
+			if (G.Invincible)
+			{
+				// mort fantome
+				G.Fantome[i].Vivante = false;
+			}
+			else
+			{
+				GestionMortHeros(G);
+				return;
 			}
 		}
 	}
-	return false;
 }
 
-bool DetectCollisionMomies(const GameData& G)
-{		
-		if (collisionRectangles(G.Heros.Pos, G.Heros.Size.x, G.Heros.Size.y, G.Momie1.PosPixels, G.Momie1.Size.x, G.Momie1.Size.y))
-				return true;
-		if (collisionRectangles(G.Heros.Pos, G.Heros.Size.x, G.Heros.Size.y, G.Momie2.PosPixels, G.Momie2.Size.x, G.Momie2.Size.y))
-			return true;
-		if (collisionRectangles(G.Heros.Pos, G.Heros.Size.x, G.Heros.Size.y, G.Momie3.PosPixels, G.Momie3.Size.x, G.Momie3.Size.y))
-			return true;
-	return false;       // aucune collision trouvée
-
-}
+//IA Fantomes
 
 
-void GestionDeplacementHeros(GameData& G) {
-	V2 anciennePos = G.Heros.Pos;
-	if (G2D::isKeyPressed(Key::LEFT))  G.Heros.Pos.x--;
-	if (G2D::isKeyPressed(Key::RIGHT)) G.Heros.Pos.x++;
-	if (G2D::isKeyPressed(Key::UP))    G.Heros.Pos.y++;
-	if (G2D::isKeyPressed(Key::DOWN))  G.Heros.Pos.y--;
-	if (DetectMur(G, G.Heros.Pos, G.Heros.Size)) G.Heros.Pos = anciennePos; // on annule le déplacement
-}
-
-void Render(const GameData& G)  // const ref => garantit que l'on ne modifie pas les donnes de G
+void DeplacementFantomes(GameData& G, _Fantome& M)
 {
-	G2D::clearScreen(Color::Black);
-	 
+	int speed = 1.75;
+
+	V2 dirs[4] = { V2(0,1), V2(1,0), V2(0,-1), V2(-1,0) };
+
+	V2 bestDir = M.Dir;
+	float bestScore = M.Peur ? -999999.f : 999999.f;
+
+	bool found = false;
+
+	for (int i = 0; i < 4; i++)
+	{
+		V2 dir = dirs[i];
+
+		if (dir.x == -M.Dir.x && dir.y == -M.Dir.y)
+			continue;
+
+		V2 newPos = M.Pos + dir * speed;
+
+		if (!PositionValide(G, newPos, M.Size))
+			continue;
+
+		found = true;
+
+		float dx = G.Heros.Pos.x - newPos.x;
+		float dy = G.Heros.Pos.y - newPos.y;
+		float dist = dx * dx + dy * dy;
+
+		float score = (M.Peur ? -dist : dist);
+
+		if ((M.Peur && score > bestScore) ||
+			(!M.Peur && score < bestScore))
+		{
+			bestScore = score;
+			bestDir = dir;
+		}
+	}
+
+	// ðŸ”¥ CAS BLOQUÃ‰ = random mouvement
+	if (!found)
+	{
+		M.Dir = dirs[rand() % 4];
+		M.Pos = M.Pos + M.Dir * speed;
+		return;
+	}
+
+	M.Dir = bestDir;
+	M.Pos = M.Pos + M.Dir * speed;
+}
+
+void UpdateFantomes(GameData& G)
+{
+	for (int i = 0; i < 3; i++)
+	{
+		if (G.Fantome[i].Vivante)
+			DeplacementFantomes(G, G.Fantome[i]);
+	}
+}
+
+
+//Pieces
+bool PlusDePieces(const GameData& G)
+{
 	for (int x = 0; x < 15; x++)
 		for (int y = 0; y < 15; y++)
-		{
-			int xx = x * G.Lpix;
-			int yy = y * G.Lpix;
-			if ( G.Mur(x,y))
-			   G2D::drawRectangle(V2(xx, yy), V2(G.Lpix, G.Lpix), Color::Blue, true);
-		}
-		 
-	// affichage du héro avec boite englobante et zoom x 2
-	G2D::drawRectangle(G.Heros.Pos,   G.Heros.Size, Color::Red );
-	G2D::drawRectWithTexture(G.Heros.IdTex, G.Heros.Pos,   G.Heros.Size);
-	
-	// affichage de la clef
-	G2D::drawRectWithTexture(G.Key.IdTex, G.Key.Pos, G.Key.Size);
-	 
-	  
-	G2D::Show();
+			if (G.Pieces[x][y])
+				return false;
+
+	return true;
 }
 
- 
-	 void Logic(GameData& G)
-	 {
-		 GestionDeplacementHeros(G);
-	 }
+int gestion_ecran_accueil(GameData& G)
+{
+	if (G2D::keyHasBeenHit(Key::ENTER))
+		return INIT_PARTIE;
+	return ECRAN_ACCUEIL;
+}
+
+int InitPartie(GameData& G)
+{
+	srand((unsigned int)time(nullptr));
+
+	// HÃ©ros
+	G.Heros.Pos = V2(45, 45);
+	G.Heros.NbVies = 3;
+	G.Heros.PiecesOr = 0;
+
+
+	//Pieces
+	G.Pieces.resize(15, vector<bool>(15, false));
+
+	for (int x = 0; x < 15; x++)
+	{
+		for (int y = 0; y < 15; y++)
+		{
+			if (!G.Mur(x, y))
+				G.Pieces[x][y] = true;
+		}
+	}
+
+
+	// FRUITS
+	G.Fruits.resize(15, vector<bool>(15, false));
+
+	int placed = 0;
+
+	while (placed < 4)
+	{
+		int x = rand() % 15;
+		int y = rand() % 15;
+
+		if (!G.Mur(x, y) && !G.Fruits[x][y])
+		{
+			G.Fruits[x][y] = true;
+			placed++;
+		}
+	}
+
+	G.Invincible = false;
+
+	// Fantomes
+	V2 startPos[3] = {
+		V2(3 * 40.f,  3 * 40.f),
+		V2(10 * 40.f,  5 * 40.f),
+		V2(5 * 40.f, 10 * 40.f)
+	}; 
+	V2 startDir[3] = { V2(1, 0), V2(0, 1), V2(-1, 0) };
+
+	for (int i = 0; i < 3; i++)
+	{
+		G.Fantome[i].Pos = startPos[i];
+		G.Fantome[i].Dir = startDir[i];
+		G.Fantome[i].Vivante = true;
+	}
+
+	G.FrameCount = 0;
+	G.TimeEcran = 0.0;
+
+	return ECRAN_JEU;
+}
+
+void GestionPieces(GameData& G)
+{
+	int x = G.Heros.Pos.x / G.Lpix;
+	int y = G.Heros.Pos.y / G.Lpix;
+
+	if (G.Pieces[x][y])
+	{
+		G.Pieces[x][y] = false;
+		G.Heros.PiecesOr++;
+	}
+}
+
+void GestionFruits(GameData& G)
+{
+	int x = G.Heros.Pos.x / G.Lpix;
+	int y = G.Heros.Pos.y / G.Lpix;
+
+	if (G.Fruits[x][y])
+	{
+		G.Fruits[x][y] = false;
+
+		G.Invincible = true;
+		G.TimeInvincible = G2D::elapsedTimeFromStartSeconds();
+
+		G.ModeFear = true;
+		G.TimeFear = G2D::elapsedTimeFromStartSeconds();
+
+		for (int i = 0; i < 3; i++)
+		{
+			if (G.Fantome[i].Vivante)
+			{
+				G.Fantome[i].Peur = true;
+				G.Fantome[i].TimePeur = G.TimeFear;
+			}
+		}
+
+	}
+}
+
+int gestion_jeu(GameData& G)
+{
+	GestionDeplacementHeros(G);
+	GestionPieces(G);
+	GestionCollisionFantomes(G);
+	GestionFruits(G);
+	UpdateFantomes(G);
+
+
+
+	G.FrameCount++;
+
+	double now = G2D::elapsedTimeFromStartSeconds();
+
+	if (G.ModeFear && now - G.TimeFear > 7.0)
+	{
+		G.ModeFear = false;
+
+		for (int i = 0; i < 3; i++)
+			G.Fantome[i].Peur = false;
+	}
+
+	//Victoire
+	if (PlusDePieces(G))
+		return ECRAN_WIN;
+
+	//Defaite
+	if (G.Heros.NbVies <= 0)  return ECRAN_GAMEOVER;
+
+	return ECRAN_JEU;
+}
+
+int gestion_GameOver(GameData& G)
+{
+	double tempsActuel = G2D::elapsedTimeFromStartSeconds();
+	if (G.TimeEcran == 0.0)
+		G.TimeEcran = tempsActuel;
+
+	if (tempsActuel - G.TimeEcran >= 3.0)
+	{
+		G.TimeEcran = 0.0;
+		return ECRAN_ACCUEIL;
+	}
+	return ECRAN_GAMEOVER;
+}
+
+int gestion_Win(GameData& G)
+{
+	double tempsActuel = G2D::elapsedTimeFromStartSeconds();
+	if (G.TimeEcran == 0.0)
+		G.TimeEcran = tempsActuel;
+
+	if (tempsActuel - G.TimeEcran >= 3.0)
+	{
+		G.TimeEcran = 0.0;
+		return ECRAN_ACCUEIL;
+	}
+	return ECRAN_WIN;
+}
+
+
+void Render(const GameData& G)
+{
+	G2D::clearScreen(Color::Black);
+
+	// ECRAN ACCUEIL
+	if (G.Ecran == ECRAN_ACCUEIL)
+	{
+		G2D::drawRectangle(V2(100, 300), V2(400, 60), Color::White, true);
+		G2D::drawRectangle(V2(100, 220), V2(400, 40), Color::Green, true);
+		G2D::drawStringFontMono(V2(150, 315), "LABYRINTHE", 25, 3, Color::Black);
+		G2D::drawStringFontMono(V2(110, 230), "ENTREE pour jouer", 18, 2, Color::Black);
+		G2D::Show();
+		return;
+	}
+
+	// ECRAN JEU
+	if (G.Ecran == ECRAN_JEU)
+	{
+		// Labyrinthe
+		for (int x = 0; x < 15; x++)
+			for (int y = 0; y < 15; y++)
+				if (G.Mur(x, y))
+					G2D::drawRectangle(
+						V2((float)(x * G.Lpix), (float)(y * G.Lpix)),
+						V2((float)G.Lpix, (float)G.Lpix),
+						Color::Blue, true);
+		for (int x = 0; x < 15; x++)
+		{
+			for (int y = 0; y < 15; y++)
+			{
+				if (G.Mur(x, y))
+				{
+					G2D::drawRectangle(
+						V2(x * G.Lpix, y * G.Lpix),
+						V2(G.Lpix, G.Lpix),
+						Color::Blue, true);
+				}
+
+				// PIECES
+				if (G.Pieces[x][y])
+				{
+					G2D::drawCircle(
+						V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2),
+						3,
+						Color::Yellow,
+						true
+					);
+				}
+
+				// FRUITS
+				if (G.Fruits[x][y])
+				{
+					G2D::drawCircle(
+						V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2),
+						6,
+						Color::Red,
+						true
+					);
+				}
+
+			}
+		}
+
+
+
+
+		// Fantome
+		for (int i = 0; i < 3; i++)
+			if (G.Fantome[i].Vivante)
+				G2D::drawRectWithTexture(G.Fantome[i].IdTex,
+					G.Fantome[i].Pos,
+					G.Fantome[i].Size);
+		for (int i = 0; i < 3; i++)
+		{
+			if (!G.Fantome[i].Vivante) continue;
+
+			Color c = Color::White;
+
+			if (G.Fantome[i].Peur)
+			{
+				double t = G2D::elapsedTimeFromStartSeconds() - G.Fantome[i].TimePeur;
+
+				if (t < 5.0)
+				{
+					c = Color::Blue; // peur normale
+				}
+				else
+				{
+					// ðŸ”¥ clignotement fin
+					c = ((int)(t * 10) % 2 == 0) ? Color::Blue : Color::White;
+				}
+			}
+
+			G2D::drawRectWithTexture(G.Fantome[i].IdTex,
+				G.Fantome[i].Pos,
+				G.Fantome[i].Size);
+		}
+
+		// HÃ©ros - animation marche
+		int texHeros = (G.FrameCount / 30) % 2 == 0
+			? G.Heros.IdTex
+			: G.Heros.IdTex2;
+		G2D::drawRectWithTexture(texHeros, G.Heros.Pos, G.Heros.Size);
+
+		for (int i = 0; i < G.Heros.NbVies; i++)
+			G2D::drawRectangle(V2(10 + i * 20, 570), V2(15, 15), Color::Red, true);
+
+
+		G2D::drawRectWithTexture(texHeros, G.Heros.Pos, G.Heros.Size);
+
+		//Chrono invincibilitÃ©
+		if (G.Invincible)
+		{
+			double now = G2D::elapsedTimeFromStartSeconds();
+			double remaining = 10.0 - (now - G.TimeInvincible);
+
+			if (remaining < 0) remaining = 0;
+
+			string txt = "INVINCIBLE: " + to_string((int)remaining) + "s";
+
+			G2D::drawStringFontMono(
+				V2(400, 570),
+				txt,
+				18,
+				2,
+				Color::Red
+			);
+		}
+
+		G2D::Show();
+		return;
+	}
+
+	// ECRAN GAME OVER
+	if (G.Ecran == ECRAN_GAMEOVER)
+	{
+		G2D::drawRectangle(V2(100, 270), V2(400, 80), Color::Red, true);
+		G2D::drawStringFontMono(V2(150, 295), "GAME OVER", 30, 3, Color::White);
+		G2D::Show();
+		return;
+	}
+
+	// ECRAN WIN
+	if (G.Ecran == ECRAN_WIN)
+	{
+		G2D::drawRectangle(V2(100, 270), V2(400, 80), Color::Green, true);
+		G2D::drawStringFontMono(V2(170, 295), "YOU WIN !", 30, 3, Color::White);
+		G2D::Show();
+		return;
+	}
+}
+
+
+
+
+void Logic(GameData& G)
+{
+	
+	if (G.Ecran == ECRAN_ACCUEIL)  G.Ecran = gestion_ecran_accueil(G);
+	if (G.Ecran == INIT_PARTIE)    G.Ecran = InitPartie(G);
+	if (G.Ecran == ECRAN_JEU)      G.Ecran = gestion_jeu(G);
+	if (G.Ecran == ECRAN_GAMEOVER) G.Ecran = gestion_GameOver(G);
+	if (G.Ecran == ECRAN_WIN)      G.Ecran = gestion_Win(G);	
+}
  
 
 void AssetsInit(GameData & G)
 {
-   // Size passé en ref et texture en param
+   // Size passÃ© en ref et texture en param
    G.Heros.IdTex = G2D::initTextureFromString(G.Heros.Size, G.Heros.texture);  
-   G.Heros.Size  = G.Heros.Size  * 2; // on peut zoomer la taille du sprite
+   G.Heros.Size  = G.Heros.Size  * 2; 
 
-   G.Key.IdTex   = G2D::initTextureFromString(G.Key.Size, G.Key.texture);
-   G.Key.Size    = G.Key.Size * 1.5; // on peut zoomer la taille du sprite
 
-}
+   V2 size2;
+   G.Heros.IdTex2 = G2D::initTextureFromString(size2, G.Heros.texture2);
+ 
 
-int gestion_jeu()
-{	
-	GameData G;
-	// le héros
-	GestionDeplacementHeros(G);    // lecture du clavier / test 
-	return 0;
+
+   V2 momieSize;
+   int momieTex = G2D::initTextureFromString(momieSize, G.Fantome[0].texture);
+   for (int i = 0; i < 3; i++)
+   {
+	   G.Fantome[i].IdTex = momieTex;
+	   G.Fantome[i].Size = momieSize * 1.5;
+   }
+
 }
 
 int main(int argc, char* argv[])
@@ -208,6 +648,4 @@ int main(int argc, char* argv[])
 	G2D::Run(Logic,Render,G, nbCalltoLogicPerSec,true);
  
 }
- 
-  
  
