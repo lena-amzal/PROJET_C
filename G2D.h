@@ -44,10 +44,10 @@ namespace G2D
 	void initWindow(V2 WindowSize, V2 WindowStartPos, std::string name);
 	void Run(void logic(GameData& G), void Render(const GameData& G), GameData& G, int nbCalltoLogicPerSec, bool HideCursor);
 	void clearScreen(Color c);
-	void Show();                      
- 
+	void Show();
+
 	// Mouse event
-	void getMousePos(int &x, int & y);
+	void getMousePos(int& x, int& y);
 	bool isMouseLeftButtonPressed();   // indique si le bouton gauche de la souris est enfoncé
 	bool isMouseRightButtonPressed();
 	bool isAnyMouseButtonPressed();
@@ -56,22 +56,22 @@ namespace G2D
 
 
 	// Font
-	void drawStringFontMono (V2 pos, std::string text, float fontSize = 20, float thickness = 3, Color c = Color::Black);
+	void drawStringFontMono(V2 pos, std::string text, float fontSize = 20, float thickness = 3, Color c = Color::Black);
 	void drawStringFontRoman(V2 pos, std::string text, float fontSize = 20, float thickness = 3, Color c = Color::Black);
 
 	// Crée une texture à partir d'une description 1 lettre = 1 pixel/couleur 
-	int initTextureFromString(V2 & Size, const std::string & Sprite);
+	int initTextureFromString(V2& Size, const std::string& Sprite);
 
 	// Affichage d'un sprite
 	// angleDef produit une rotation du sprite autours de son centre
 	int  ExtractTextureFromPNG(const std::string& filepath, Transparency T);  // 1 pixel gives key-color transparency
 	int  ExtractTextureFromPNG(const std::string& filepath, int R = 0, int G = 0, int B = 0);
 	void drawRectWithTexture(int IDtexture, V2 pos, V2 size, float angleDeg = 0);
-	
+
 	// Draw Geometry
 	void setPixel(V2 P, Color c);
-	void drawLine(V2 P1, V2 P2, Color c );
-	void drawPolygon(std::vector<V2> & PointList, Color c, bool fill = false);
+	void drawLine(V2 P1, V2 P2, Color c);
+	void drawPolygon(std::vector<V2>& PointList, Color c, bool fill = false);
 	void drawRectangle(V2 P1, V2 Size, Color c, bool fill = false);
 	void drawCircle(V2 C, float r, Color c, bool fill = false);
 
@@ -79,4 +79,4 @@ namespace G2D
 	// Timing function
 	double elapsedTimeFromStartSeconds();   // temps écoulé depuis le début du jeu
 	bool   isOnPause();
-}
+};

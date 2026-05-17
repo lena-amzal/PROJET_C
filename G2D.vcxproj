@@ -166,8 +166,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\jdk-25_windows-x64_bin.exe" />
-    <None Include="..\sqldeveloper-24.3.1.347.1826-x64.zip" />
-    <None Include="..\TD.pdf" />
     <None Include="glut32.dll" />
   </ItemGroup>
   <ItemGroup>
