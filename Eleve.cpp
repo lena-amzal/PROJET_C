@@ -8,13 +8,12 @@
 
 using namespace std;
 
-
-// ===================== CONSTANTES ECRANS =====================
-const int ECRAN_ACCUEIL = 0;
-const int INIT_PARTIE = 1;
-const int ECRAN_JEU = 2;
-const int ECRAN_GAMEOVER = 3;
-const int ECRAN_WIN = 4;
+// Enum & const
+enum class Ecran { Accueil, InitPartie, Jeu, GameOver, Win };
+enum class TypeFantome { Crimson, Berry, Azure, Total };
+const int NB_FANTOMES = static_cast<int>(TypeFantome::Total);
+const int NB_LIGNES = 15; 
+const int NB_COLONNES = 20; 
 
 struct _Heros
 {
@@ -45,6 +44,7 @@ struct _Heros
 		"[     YYYYYYYYYYYY     ]";
 
 	V2 Size;
+	V2 Dir = V2(1, 0);
 	int IdTex;
 	int IdTex2;
 	V2 Pos = V2(45, 45);
@@ -55,8 +55,8 @@ struct _Heros
 
 struct _Fantome
 {
-	string texture[3] = {
-		// Rouge - Blinky
+    string texture[3] = {
+		// Crimson
 		"[    RRRRRRRRRRRRRR    ]"
 		"[  RRRRRRRRRRRRRRRRRR  ]"
 		"[ RRRRRRRRRRRRRRRRRRRR ]"
@@ -70,7 +70,7 @@ struct _Fantome
 		"[RRRRRRRRRRRRRRRRRRRRRR]"
 		"[RRR  RRRR  RRRR  RRRRR]",
 
-		// Cyan - Inky
+        // Azure
 		"[    CCCCCCCCCCCCCC    ]"
 		"[  CCCCCCCCCCCCCCCCCC  ]"
 		"[ CCCCCCCCCCCCCCCCCCCC ]"
@@ -84,7 +84,7 @@ struct _Fantome
 		"[CCCCCCCCCCCCCCCCCCCCCC]"
 		"[CCC  CCCC  CCCC  CCCCC]",
 
-		// Magenta - Pinky
+        // Berry
 		"[    MMMMMMMMMMMMMM    ]"
 		"[  MMMMMMMMMMMMMMMMMM  ]"
 		"[ MMMMMMMMMMMMMMMMMMMM ]"
@@ -102,9 +102,6 @@ struct _Fantome
 	int IdTex;
 	V2 Pos;
 	V2 Dir;
-	bool Vivante = true;
-	bool Peur = false;
-	double TimePeur = 0;
 };
 
 
@@ -125,36 +122,42 @@ struct GameData
 		"M M   M M   M      M"
 		"M M MMM M MMM MM M M"
 		"M M     M     M    M"
-		"M MMMMM M MMMM MM  M"
+		"M MMMMM M MMMMMMM  M"
 		"M       M          M"
 		"MMMMMMMMMMMMMMMMMMMM";
-	int	NbLignes = 15;
-	int NbColonnes = 20;
 
+    // indique la présence d'un mur à la case (x,y)
+	bool Mur(int x, int y) const { return Map[(NB_LIGNES - y - 1) * NB_COLONNES + x] == 'M'; }
 
-	// indique la présence d'un mur à la case (x,y)
-	bool Mur(int x, int y) const { return Map[(NbLignes - y - 1) * NbColonnes + x] == 'M'; }  // les fonctions const ne modifient pas les données
+	// largeur en pixels des cases du labyrinthe
+	int Lpix = 40;  
+	// données du héros et des fantômes
+	_Heros Heros; 
+	_Fantome Fantome[NB_FANTOMES]; 
+	V2 FantomeStartPos[NB_FANTOMES];
+	V2 FantomeStartDir[NB_FANTOMES];
 
-	int Lpix = 40;  // largeur en pixels des cases du labyrinthe
-
-
-	_Heros Heros;   // data du héros
-	_Fantome Fantome[3];
-
-
-	int Ecran = ECRAN_ACCUEIL;
-	double TimeEcran = 0.0;
+    double TimeEcran = 0.0;
 	int FrameCount = 0;
-	vector<vector<bool>> Pieces;
-	vector<vector<bool>> Fruits;
-	bool ModeFear = false;
-	double TimeFear = 0;
-
+    Ecran EcranActuel = Ecran::Accueil;
+    vector<vector<bool>> Pieces;
+	vector<vector<bool>> Bonus;
 	bool Invincible = false;
 	double TimeInvincible = 0;
 
 
-	GameData() {}
+	GameData()
+	{
+		// initialise les positions de départ des fantômes
+		FantomeStartPos[static_cast<int>(TypeFantome::Crimson)] = V2(3 * Lpix, 13 * Lpix);
+		FantomeStartPos[static_cast<int>(TypeFantome::Berry)] = V2(17 * Lpix, 13 * Lpix);
+		FantomeStartPos[static_cast<int>(TypeFantome::Azure)] = V2(17 * Lpix, 1 * Lpix);
+
+		// Directions initiales
+		FantomeStartDir[static_cast<int>(TypeFantome::Crimson)] = V2(1, 0);
+		FantomeStartDir[static_cast<int>(TypeFantome::Berry)] = V2(0, 1);
+		FantomeStartDir[static_cast<int>(TypeFantome::Azure)] = V2(-1, 0);
+	}
 
 };
 
@@ -173,8 +176,8 @@ bool CollisionRectRect(V2 r1, V2 s1, V2 r2, V2 s2)
 
 bool PositionValide(const GameData& G, V2 pos, V2 taille)
 {
-	for (int x = 0; x < G.NbColonnes; x++)
-		for (int y = 0; y < G.NbLignes; y++)
+    for (int x = 0; x < NB_COLONNES; x++)
+		for (int y = 0; y < NB_LIGNES; y++)
 			if (G.Mur(x, y))
 			{
 				V2 murPos = V2((float)(x * G.Lpix), (float)(y * G.Lpix));
@@ -187,18 +190,16 @@ bool PositionValide(const GameData& G, V2 pos, V2 taille)
 
 //deplacement du Heros
 
-
-
 void GestionDeplacementHeros(GameData& G)
 {
 	V2 newPos = G.Heros.Pos;
 	float speed = 2;
 	bool enMouvement = false;
 
-	if (G2D::isKeyPressed(Key::LEFT)) { newPos.x -= speed; enMouvement = true; }
-	if (G2D::isKeyPressed(Key::RIGHT)) { newPos.x += speed; enMouvement = true; }
-	if (G2D::isKeyPressed(Key::UP)) { newPos.y += speed; enMouvement = true; }
-	if (G2D::isKeyPressed(Key::DOWN)) { newPos.y -= speed; enMouvement = true; }
+	if (G2D::isKeyPressed(Key::RIGHT)) { newPos.x += speed; G.Heros.Dir = V2(1, 0);  enMouvement = true; }
+	if (G2D::isKeyPressed(Key::LEFT)) { newPos.x -= speed; G.Heros.Dir = V2(-1, 0); enMouvement = true; }
+	if (G2D::isKeyPressed(Key::UP)) { newPos.y += speed; G.Heros.Dir = V2(0, 1);  enMouvement = true; }
+	if (G2D::isKeyPressed(Key::DOWN)) { newPos.y -= speed; G.Heros.Dir = V2(0, -1); enMouvement = true; }
 
 	V2 taille = V2(G.Heros.Size.x - 4, G.Heros.Size.y - 4);
 
@@ -217,15 +218,9 @@ void GestionMortHeros(GameData& G)
 {
 	G.Heros.Pos = V2(G.Lpix + 5, G.Lpix + 5);
 	G.Heros.NbVies -= 1;
-	// Repousse les fantômes à leur position de départ
-	V2 startPos[3] = {
-		V2(3 * G.Lpix,  13 * G.Lpix),
-		V2(17 * G.Lpix, 13 * G.Lpix),
-		V2(17 * G.Lpix,  1 * G.Lpix)
-	};
-	for (int i = 0; i < 3; i++)
-		if (G.Fantome[i].Vivante)
-			G.Fantome[i].Pos = startPos[i];
+    // Replace les fantômes à leurs positions de départ
+	for (int i = 0; i < NB_FANTOMES; i++)
+		G.Fantome[i].Pos = G.FantomeStartPos[i];
 }
 
 
@@ -234,24 +229,15 @@ void GestionMortHeros(GameData& G)
 
 void GestionCollisionFantomes(GameData& G)
 {
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < NB_FANTOMES; i++)
 	{
-		if (!G.Fantome[i].Vivante) continue;
-
-		if (CollisionRectRect(G.Heros.Pos, G.Heros.Size,
-			G.Fantome[i].Pos, G.Fantome[i].Size))
+		if (CollisionRectRect(G.Heros.Pos, G.Heros.Size, G.Fantome[i].Pos, G.Fantome[i].Size))
 		{
-			if (G.Invincible)
+            if (G.Invincible)
 			{
-				V2 startPos[3] = {
-					V2(3 * G.Lpix,  13 * G.Lpix),
-					V2(17 * G.Lpix, 13 * G.Lpix),
-					V2(17 * G.Lpix,  1 * G.Lpix)
-				};
-
-				G.Fantome[i].Pos = startPos[i];
+				// teleport ghost back to its centralized start position
+				G.Fantome[i].Pos = G.FantomeStartPos[i];
 				G.Fantome[i].Dir = V2(1, 0);
-				G.Fantome[i].Peur = false;
 			}
 			else
 			{
@@ -262,12 +248,23 @@ void GestionCollisionFantomes(GameData& G)
 	}
 }
 
-//IA Fantomes
+//IA des fantômes
 
 
-void DeplacementFantomes(GameData& G, _Fantome& M)
+void DeplacementFantomes(GameData& G, _Fantome& M, TypeFantome type)
 {
 	float speed = 2.0f;
+
+	V2 cible = G.Heros.Pos;
+
+	if (type == TypeFantome::Crimson)  // Crimson suit exactement le héros
+		cible = G.Heros.Pos;
+
+	if (type == TypeFantome::Berry)  // Berry arrive devant le héros
+		cible = G.Heros.Pos + G.Heros.Dir * 4 * G.Lpix;
+
+	if (type == TypeFantome::Azure)  // Azure arrive derrière le héros
+		cible = G.Heros.Pos - G.Heros.Dir * 4 * G.Lpix;
 
 	V2 dirs[4] =
 	{
@@ -292,8 +289,8 @@ void DeplacementFantomes(GameData& G, _Fantome& M)
 			if (!PositionValide(G, newPos, M.Size))
 				continue;
 
-			float dx = G.Heros.Pos.x - newPos.x;
-			float dy = G.Heros.Pos.y - newPos.y;
+			float dx = cible.x - newPos.x;
+			float dy = cible.y - newPos.y;
 
 			float dist = dx * dx + dy * dy;
 
@@ -321,8 +318,8 @@ void DeplacementFantomes(GameData& G, _Fantome& M)
 			if (!PositionValide(G, newPos, M.Size))
 				continue;
 
-			float dx = G.Heros.Pos.x - newPos.x;
-			float dy = G.Heros.Pos.y - newPos.y;
+			float dx = cible.x - newPos.x;
+			float dy = cible.y - newPos.y;
 
 			float dist = dx * dx + dy * dy;
 
@@ -340,10 +337,8 @@ void DeplacementFantomes(GameData& G, _Fantome& M)
 
 void UpdateFantomes(GameData& G)
 {
-	for (int i = 0; i < 3; i++)
-	{
-		if (G.Fantome[i].Vivante)
-			DeplacementFantomes(G, G.Fantome[i]);
+    for (int i = 0; i < NB_FANTOMES; i++){
+		DeplacementFantomes(G, G.Fantome[i], static_cast<TypeFantome>(i));
 	}
 }
 
@@ -351,24 +346,24 @@ void UpdateFantomes(GameData& G)
 //Pieces
 bool PlusDePieces(const GameData& G)
 {
-	for (int x = 0; x < G.NbColonnes; x++)
-		for (int y = 0; y < G.NbLignes; y++)
+  for (int x = 0; x < NB_COLONNES; x++)
+	for (int y = 0; y < NB_LIGNES; y++)
 			if (G.Pieces[x][y])
 				return false;
 
 	return true;
 }
 
-int gestion_ecran_accueil(GameData& G)
+Ecran gestion_ecran_accueil(GameData& G)
 {
-	if (G2D::keyHasBeenHit(Key::ENTER))
-		return INIT_PARTIE;
-	return ECRAN_ACCUEIL;
+    if (G2D::keyHasBeenHit(Key::ENTER))
+		return Ecran::InitPartie;
+	return Ecran::Accueil;
 }
 
-int InitPartie(GameData& G)
+Ecran InitPartie(GameData& G)
 {
-	srand((unsigned int)time(nullptr));
+	srand((unsigned int)time(nullptr)); 
 
 	// Héros
 	G.Heros.Pos = V2(45, 45);
@@ -377,11 +372,11 @@ int InitPartie(GameData& G)
 
 
 	//Pieces
-	G.Pieces.resize(G.NbColonnes, vector<bool>(G.NbLignes, false));
+	G.Pieces.resize(NB_COLONNES, vector<bool>(NB_LIGNES, false));
 
-	for (int x = 0; x < G.NbColonnes; x++)
+    for (int x = 0; x < NB_COLONNES; x++)
 	{
-		for (int y = 0; y < G.NbLignes; y++)
+		for (int y = 0; y < NB_LIGNES; y++)
 		{
 			if (!G.Mur(x, y))
 				G.Pieces[x][y] = true;
@@ -389,56 +384,42 @@ int InitPartie(GameData& G)
 	}
 
 
-	// FRUITS
-	G.Fruits.resize(G.NbColonnes, vector<bool>(G.NbLignes, false));
+	// Bonus invincibilité
+    G.Bonus.resize(NB_COLONNES, vector<bool>(NB_LIGNES, false));
 
 	int placed = 0;
 
 	while (placed < 4)
 	{
-		int x = rand() % G.NbColonnes;
-		int y = rand() % G.NbLignes;
+        int x = rand() % NB_COLONNES;
+		int y = rand() % NB_LIGNES;
 
-		if (!G.Mur(x, y) && !G.Fruits[x][y])
+		if (!G.Mur(x, y) && !G.Bonus[x][y])
 		{
-			G.Fruits[x][y] = true;
+			G.Bonus[x][y] = true;
 			placed++;
 		}
 	}
 
 	G.Invincible = false;
 
-	// Fantomes
-	V2 startPos[3] = {
-		V2(3 * G.Lpix,  13 * G.Lpix),  // haut gauche
-		V2(17 * G.Lpix, 13 * G.Lpix),  // haut droite
-		V2(17 * G.Lpix,  1 * G.Lpix)   // bas droite
-	};
-	V2 startDir[3] = { V2(1, 0), V2(0, 1), V2(-1, 0) };
-
-	for (int i = 0; i < 3; i++)
+	// Directions & positions initiales des fantômes
+	for (int i = 0; i < NB_FANTOMES; i++)
 	{
-		G.Fantome[i].Pos = startPos[i];
-		G.Fantome[i].Dir = startDir[i];
-		G.Fantome[i].Vivante = true;
+		G.Fantome[i].Pos = G.FantomeStartPos[i];
+		G.Fantome[i].Dir = G.FantomeStartDir[i];
 	}
 
 	G.FrameCount = 0;
 	G.TimeEcran = 0.0;
 
-	return ECRAN_JEU;
-	for (int i = 0; i < 3; i++)
-	{
-		int cx = G.Fantome[i].Pos.x / G.Lpix;
-		int cy = G.Fantome[i].Pos.y / G.Lpix;
-		cout << "Fantome " << i << " case (" << cx << "," << cy << ") mur=" << G.Mur(cx, cy) << endl;
-	}
+    return Ecran::Jeu;
 }
 
 void GestionPieces(GameData& G)
 {
-	int x = G.Heros.Pos.x / G.Lpix;
-	int y = G.Heros.Pos.y / G.Lpix;
+ int x = G.Heros.Pos.x / G.Lpix; 
+	int y = G.Heros.Pos.y / G.Lpix; 
 
 	if (G.Pieces[x][y])
 	{
@@ -447,39 +428,26 @@ void GestionPieces(GameData& G)
 	}
 }
 
-void GestionFruits(GameData& G)
+void GestionBonus(GameData& G)
 {
 	int x = G.Heros.Pos.x / G.Lpix;
 	int y = G.Heros.Pos.y / G.Lpix;
 
-	if (G.Fruits[x][y])
+	if (G.Bonus[x][y])
 	{
-		G.Fruits[x][y] = false;
+		G.Bonus[x][y] = false;
 
 		G.Invincible = true;
 		G.TimeInvincible = G2D::elapsedTimeFromStartSeconds();
-
-		G.ModeFear = true;
-		G.TimeFear = G2D::elapsedTimeFromStartSeconds();
-
-		for (int i = 0; i < 3; i++)
-		{
-			if (G.Fantome[i].Vivante)
-			{
-				G.Fantome[i].Peur = true;
-				G.Fantome[i].TimePeur = G.TimeFear;
-			}
-		}
-
 	}
 }
 
-int gestion_jeu(GameData& G)
+Ecran gestion_jeu(GameData& G)
 {
 	GestionDeplacementHeros(G);
 	GestionPieces(G);
 	GestionCollisionFantomes(G);
-	GestionFruits(G);
+    GestionBonus(G);
 	UpdateFantomes(G);
 
 
@@ -491,30 +459,20 @@ int gestion_jeu(GameData& G)
 	if (G.Invincible && now - G.TimeInvincible > 10.0)
 	{
 		G.Invincible = false;
-
-		for (int i = 0; i < 3; i++)
-			G.Fantome[i].Peur = false;
 	}
 
-	if (G.ModeFear && now - G.TimeFear > 7.0)
-	{
-		G.ModeFear = false;
-
-		for (int i = 0; i < 3; i++)
-			G.Fantome[i].Peur = false;
-	}
-
+	
 	//Victoire
-	if (PlusDePieces(G))
-		return ECRAN_WIN;
+    if (PlusDePieces(G))
+		return Ecran::Win;
 
 	//Defaite
-	if (G.Heros.NbVies <= 0)  return ECRAN_GAMEOVER;
+    if (G.Heros.NbVies <= 0)  return Ecran::GameOver;
 
-	return ECRAN_JEU;
+	return Ecran::Jeu;
 }
 
-int gestion_GameOver(GameData& G)
+Ecran gestion_GameOver(GameData& G)
 {
 	double tempsActuel = G2D::elapsedTimeFromStartSeconds();
 	if (G.TimeEcran == 0.0)
@@ -523,31 +481,30 @@ int gestion_GameOver(GameData& G)
 	if (tempsActuel - G.TimeEcran >= 3.0)
 	{
 		G.TimeEcran = 0.0;
-		return ECRAN_ACCUEIL;
+        return Ecran::Accueil;
 	}
-	return ECRAN_GAMEOVER;
+    return Ecran::GameOver;
 }
 
-int gestion_Win(GameData& G)
+Ecran gestion_Win(GameData& G)
 {
 	double tempsActuel = G2D::elapsedTimeFromStartSeconds();
-	if (G.TimeEcran == 0.0)
-		G.TimeEcran = tempsActuel;
+	if (G.TimeEcran == 0.0) G.TimeEcran = tempsActuel;
 
 	if (tempsActuel - G.TimeEcran >= 3.0)
 	{
 		G.TimeEcran = 0.0;
-		return ECRAN_ACCUEIL;
+        return Ecran::Accueil;
 	}
-	return ECRAN_WIN;
+    return Ecran::Win;
 }
 
 
 void Render(const GameData& G)
 {
 	G2D::clearScreen(Color::Black);
-	int largeurFenetre = G.Lpix * G.NbColonnes;  // 800
-	int hauteurFenetre = G.Lpix * G.NbLignes;    // 600
+	int largeurFenetre = G.Lpix * NB_COLONNES;
+	int hauteurFenetre = G.Lpix * NB_LIGNES;  
 
 	int largeurRect = 400;
 	int hauteurRect = 80;
@@ -562,69 +519,55 @@ void Render(const GameData& G)
 	int y1 = hauteurFenetre / 2;        // rectangle titre
 	int y2 = hauteurFenetre / 2 - 80;  // rectangle bouton en dessous
 
-	// ECRAN ACCUEIL
-	if (G.Ecran == ECRAN_ACCUEIL)
-	{
+    // ECRAN ACCUEIL
+    if (G.EcranActuel == Ecran::Accueil)
+
+	{	// Fonds des rectangles
 		G2D::drawRectangle(V2(x, y1 - hauteurRect1 / 2), V2(largeurRect, hauteurRect1), Color::White, true);
 		G2D::drawRectangle(V2(x, y2 - hauteurRect2 / 2), V2(largeurRect, hauteurRect2), Color::Gray, true);
+
 		// Texte centré dans le rectangle blanc
 		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 80, y1 - 10), "LABYRINTHE", 25, 3, Color::Black);
+
 		// Texte centré dans le rectangle magenta  
 		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 80, y2 - 8), "ENTREE to play", 18, 2, Color::Black);
+
 		G2D::Show();
+
 		return;
 	}
 
-	// ECRAN JEU
-	if (G.Ecran == ECRAN_JEU)
+    // ECRAN JEU
+  if (G.EcranActuel == Ecran::Jeu)
 	{
 		// Labyrinthe
-		for (int x = 0; x < G.NbColonnes; x++)
-		{
-			for (int y = 0; y < G.NbLignes; y++)
+    for (int x = 0; x < NB_COLONNES; x++)
+	{
+		for (int y = 0; y < NB_LIGNES; y++)
 			{
 				if (G.Mur(x, y))
 				{
-					G2D::drawRectangle(
-						V2(x * G.Lpix, y * G.Lpix),
-						V2(G.Lpix, G.Lpix),
-						Color::Cyan);
+					G2D::drawRectangle(V2(x * G.Lpix, y * G.Lpix),V2(G.Lpix, G.Lpix), Color::Cyan);
 				}
 
-				// PIECES
+				// Pieces
 				if (G.Pieces[x][y])
 				{
-					G2D::drawCircle(
-						V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2),
-						3,
-						Color::Yellow,
-						true
-					);
+					G2D::drawCircle(V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2), 3,Color::Yellow, true);
 				}
 
-				// FRUITS
-				if (G.Fruits[x][y])
+                // Bonus invincibilité
+				if (G.Bonus[x][y])
 				{
-					G2D::drawCircle(
-						V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2),
-						6,
-						Color::Red,
-						true
-					);
+					G2D::drawCircle(V2(x * G.Lpix + G.Lpix / 2, y * G.Lpix + G.Lpix / 2), 6, Color::Green, true);
 				}
-
 			}
 		}
 
-
-
-
-		// Fantome
-		for (int i = 0; i < 3; i++)
-			if (G.Fantome[i].Vivante)
-				G2D::drawRectWithTexture(G.Fantome[i].IdTex,
-					G.Fantome[i].Pos,
-					G.Fantome[i].Size);
+        // Fantomes
+		for (int i = 0; i < NB_FANTOMES; i++){
+			G2D::drawRectWithTexture(G.Fantome[i].IdTex,G.Fantome[i].Pos, G.Fantome[i].Size);
+		}
 
 		// Héros - animation marche
 		int texHeros = (G.FrameCount / 30) % 2 == 0
@@ -632,12 +575,11 @@ void Render(const GameData& G)
 			: G.Heros.IdTex2;
 		G2D::drawRectWithTexture(texHeros, G.Heros.Pos, G.Heros.Size);
 
-		// Carrés de vies
+        // Points de vies
+		G2D::drawStringFontMono(V2(10, G.Lpix * NB_LIGNES + 25), "HP :", 18, 2, Color::White);
 		for (int i = 0; i < G.Heros.NbVies; i++)
-			G2D::drawRectangle(
-				V2(10 + i * (G.Lpix + 5), G.Lpix * G.NbLignes - G.Lpix * 0.7f),
-				V2(G.Lpix * 0.5f, G.Lpix * 0.5f),
-				Color::Red, true);
+			G2D::drawRectangle(V2(70 + i * (G.Lpix + 5), G.Lpix * NB_LIGNES + 20),
+			V2(G.Lpix * 0.5f, G.Lpix * 0.5f), Color::Red, true);
 
 		//Chrono invincibilité
 		if (G.Invincible)
@@ -646,24 +588,16 @@ void Render(const GameData& G)
 			double remaining = 10.0 - (now - G.TimeInvincible);
 
 			if (remaining < 0) remaining = 0;
-
-			string txt = "INVINCIBLE: " + to_string((int)remaining) + "s";
-
-			G2D::drawStringFontMono(
-				V2(400, 570),
-				txt,
-				18,
-				2,
-				Color::Red
-			);
+            string txt = "INVINCIBLE: " + to_string((int)remaining) + "s";
+			G2D::drawStringFontMono(V2(200, G.Lpix * NB_LIGNES + 25), txt, 18, 2, Color:: Green);
 		}
 
 		G2D::Show();
 		return;
 	}
 
-	// ECRAN GAME OVER
-	if (G.Ecran == ECRAN_GAMEOVER)
+    // ECRAN GAME OVER
+ if (G.EcranActuel == Ecran::GameOver)
 	{
 		G2D::drawRectangle(V2(x, y), V2(largeurRect, hauteurRect), Color::Red, true);
 		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 100, y + hauteurRect / 2 - 15), "GAME OVER", 30, 3, Color::White);
@@ -671,8 +605,8 @@ void Render(const GameData& G)
 		return;
 	}
 
-	// ECRAN WIN
-	if (G.Ecran == ECRAN_WIN)
+    // ECRAN WIN
+  if (G.EcranActuel == Ecran::Win)
 	{
 		G2D::drawRectangle(V2(x, y), V2(largeurRect, hauteurRect), Color::Green, true);
 		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 100, y + hauteurRect / 2 - 15), "YOU WIN !", 30, 3, Color::White);
@@ -682,16 +616,13 @@ void Render(const GameData& G)
 }
 
 
-
-
 void Logic(GameData& G)
 {
-
-	if (G.Ecran == ECRAN_ACCUEIL)  G.Ecran = gestion_ecran_accueil(G);
-	if (G.Ecran == INIT_PARTIE)    G.Ecran = InitPartie(G);
-	if (G.Ecran == ECRAN_JEU)      G.Ecran = gestion_jeu(G);
-	if (G.Ecran == ECRAN_GAMEOVER) G.Ecran = gestion_GameOver(G);
-	if (G.Ecran == ECRAN_WIN)      G.Ecran = gestion_Win(G);
+    if (G.EcranActuel == Ecran::Accueil)  G.EcranActuel = gestion_ecran_accueil(G);
+	if (G.EcranActuel == Ecran::InitPartie)    G.EcranActuel = InitPartie(G);
+	if (G.EcranActuel == Ecran::Jeu)      G.EcranActuel = gestion_jeu(G);
+	if (G.EcranActuel == Ecran::GameOver) G.EcranActuel = gestion_GameOver(G);
+	if (G.EcranActuel == Ecran::Win)      G.EcranActuel = gestion_Win(G);
 }
 
 
@@ -706,11 +637,9 @@ void AssetsInit(GameData& G)
 	G.Heros.IdTex2 = G2D::initTextureFromString(size2, G.Heros.texture2);
 
 
-
-	for (int i = 0; i < 3; i++)
+    for (int i = 0; i < NB_FANTOMES; i++)
 	{
-		V2 momieSize;
-		G.Fantome[i].IdTex = G2D::initTextureFromString(momieSize, G.Fantome[i].texture[i]);
+		G.Fantome[i].IdTex = G2D::initTextureFromString(G.Fantome[i].Size, G.Fantome[i].texture[i]);
 		G.Fantome[i].Size = V2(G.Lpix * 0.8f, G.Lpix * 0.8f);
 	}
 
@@ -720,7 +649,7 @@ int main(int argc, char* argv[])
 {
 	GameData G;
 
-	G2D::initWindow(V2(G.Lpix * G.NbColonnes, G.Lpix * G.NbLignes), V2(200, 200), string("Labyrinthe"));
+    G2D::initWindow(V2(G.Lpix * NB_COLONNES, G.Lpix * NB_LIGNES + 70), V2(200, 200), string("Labyrinthe"));
 
 	AssetsInit(G);
 
