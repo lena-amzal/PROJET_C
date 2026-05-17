@@ -4,8 +4,8 @@
 #include <string>
 #include <ctime>
 #include "G2D.h"
- 
-	
+
+
 using namespace std;
 
 
@@ -15,7 +15,7 @@ const int INIT_PARTIE = 1;
 const int ECRAN_JEU = 2;
 const int ECRAN_GAMEOVER = 3;
 const int ECRAN_WIN = 4;
- 
+
 struct _Heros
 {
 	string texture =
@@ -47,7 +47,7 @@ struct _Heros
 	V2 Size;
 	int IdTex;
 	int IdTex2;
-	V2 Pos = V2(45,45);
+	V2 Pos = V2(45, 45);
 	int NbVies = 3;
 	int PiecesOr = 0;
 };
@@ -133,14 +133,14 @@ struct GameData
 
 
 	// indique la présence d'un mur à la case (x,y)
-	 bool Mur(int x, int y) const  { return Map[(NbLignes - y - 1)*NbColonnes+x] == 'M'; }  // les fonctions const ne modifient pas les données
+	bool Mur(int x, int y) const { return Map[(NbLignes - y - 1) * NbColonnes + x] == 'M'; }  // les fonctions const ne modifient pas les données
 
 	int Lpix = 40;  // largeur en pixels des cases du labyrinthe
 
 
 	_Heros Heros;   // data du héros
 	_Fantome Fantome[3];
-	
+
 
 	int Ecran = ECRAN_ACCUEIL;
 	double TimeEcran = 0.0;
@@ -208,7 +208,7 @@ void GestionDeplacementHeros(GameData& G)
 	if (enMouvement)
 		G.FrameCount++;
 	else
-		G.FrameCount = 0; 
+		G.FrameCount = 0;
 }
 
 //Mort du heros
@@ -269,51 +269,69 @@ void DeplacementFantomes(GameData& G, _Fantome& M)
 {
 	float speed = 2.0f;
 
-	// Snap sur la grille
-	M.Pos.x = round(M.Pos.x / speed) * speed;
-	M.Pos.y = round(M.Pos.y / speed) * speed;
-
-	V2 dirs[4] = { V2(0,1), V2(1,0), V2(0,-1), V2(-1,0) };
+	V2 dirs[4] =
+	{
+		V2(0,1),
+		V2(1,0),
+		V2(0,-1),
+		V2(-1,0)
+	};
 
 	V2 bestDir = M.Dir;
-	float bestScore = M.Peur ? -999999.f : 999999.f;
-	bool found = false;
 
-	for (int i = 0; i < 4; i++)
+	if (G.Invincible)
 	{
-		V2 dir = dirs[i];
-		if (dir.x == -M.Dir.x && dir.y == -M.Dir.y) continue;
+		float bestDist = -1.0f;
 
-		V2 newPos = M.Pos + dir * speed;
-		if (!PositionValide(G, newPos, M.Size)) continue;
-
-		found = true;
-
-		float dx = G.Heros.Pos.x - newPos.x;
-		float dy = G.Heros.Pos.y - newPos.y;
-		float dist = dx * dx + dy * dy;
-		float score = M.Peur ? -dist : dist;
-
-		if ((M.Peur && score > bestScore) || (!M.Peur && score < bestScore))
-		{
-			bestScore = score;
-			bestDir = dir;
-		}
-	}
-
-	if (!found)
-	{
 		for (int i = 0; i < 4; i++)
 		{
-			V2 newPos = M.Pos + dirs[i] * speed;
-			if (PositionValide(G, newPos, M.Size))
+			V2 dir = dirs[i];
+
+			V2 newPos = M.Pos + dir * speed;
+
+			if (!PositionValide(G, newPos, M.Size))
+				continue;
+
+			float dx = G.Heros.Pos.x - newPos.x;
+			float dy = G.Heros.Pos.y - newPos.y;
+
+			float dist = dx * dx + dy * dy;
+
+			if (dist > bestDist)
 			{
-				M.Dir = dirs[i];
-				M.Pos = newPos;
-				return;
+				bestDist = dist;
+				bestDir = dir;
 			}
 		}
-		return;
+	}
+	else
+	{
+
+		float bestDist = 999999.f;
+
+		for (int i = 0; i < 4; i++)
+		{
+			V2 dir = dirs[i];
+
+			if (dir.x == -M.Dir.x && dir.y == -M.Dir.y)
+				continue;
+
+			V2 newPos = M.Pos + dir * speed;
+
+			if (!PositionValide(G, newPos, M.Size))
+				continue;
+
+			float dx = G.Heros.Pos.x - newPos.x;
+			float dy = G.Heros.Pos.y - newPos.y;
+
+			float dist = dx * dx + dy * dy;
+
+			if (dist < bestDist)
+			{
+				bestDist = dist;
+				bestDir = dir;
+			}
+		}
 	}
 
 	M.Dir = bestDir;
@@ -361,7 +379,7 @@ int InitPartie(GameData& G)
 	//Pieces
 	G.Pieces.resize(G.NbColonnes, vector<bool>(G.NbLignes, false));
 
-	for (int x = 0; x < G.NbColonnes ; x++)
+	for (int x = 0; x < G.NbColonnes; x++)
 	{
 		for (int y = 0; y < G.NbLignes; y++)
 		{
@@ -409,7 +427,7 @@ int InitPartie(GameData& G)
 	G.TimeEcran = 0.0;
 
 	return ECRAN_JEU;
-	for(int i = 0; i < 3; i++)
+	for (int i = 0; i < 3; i++)
 	{
 		int cx = G.Fantome[i].Pos.x / G.Lpix;
 		int cy = G.Fantome[i].Pos.y / G.Lpix;
@@ -469,6 +487,14 @@ int gestion_jeu(GameData& G)
 	G.FrameCount++;
 
 	double now = G2D::elapsedTimeFromStartSeconds();
+
+	if (G.Invincible && now - G.TimeInvincible > 10.0)
+	{
+		G.Invincible = false;
+
+		for (int i = 0; i < 3; i++)
+			G.Fantome[i].Peur = false;
+	}
 
 	if (G.ModeFear && now - G.TimeFear > 7.0)
 	{
@@ -598,7 +624,7 @@ void Render(const GameData& G)
 			if (G.Fantome[i].Vivante)
 				G2D::drawRectWithTexture(G.Fantome[i].IdTex,
 					G.Fantome[i].Pos,
-					G.Fantome[i].Size);	
+					G.Fantome[i].Size);
 
 		// Héros - animation marche
 		int texHeros = (G.FrameCount / 30) % 2 == 0
@@ -660,47 +686,46 @@ void Render(const GameData& G)
 
 void Logic(GameData& G)
 {
-	
+
 	if (G.Ecran == ECRAN_ACCUEIL)  G.Ecran = gestion_ecran_accueil(G);
 	if (G.Ecran == INIT_PARTIE)    G.Ecran = InitPartie(G);
 	if (G.Ecran == ECRAN_JEU)      G.Ecran = gestion_jeu(G);
 	if (G.Ecran == ECRAN_GAMEOVER) G.Ecran = gestion_GameOver(G);
-	if (G.Ecran == ECRAN_WIN)      G.Ecran = gestion_Win(G);	
+	if (G.Ecran == ECRAN_WIN)      G.Ecran = gestion_Win(G);
 }
- 
 
-void AssetsInit(GameData & G)
+
+void AssetsInit(GameData& G)
 {
-   // Size passé en ref et texture en param
-   G.Heros.IdTex = G2D::initTextureFromString(G.Heros.Size, G.Heros.texture);  
-   G.Heros.Size = V2(G.Lpix * 0.8f, G.Lpix * 0.8f);
+	// Size passé en ref et texture en param
+	G.Heros.IdTex = G2D::initTextureFromString(G.Heros.Size, G.Heros.texture);
+	G.Heros.Size = V2(G.Lpix * 0.8f, G.Lpix * 0.8f);
 
 
-   V2 size2;
-   G.Heros.IdTex2 = G2D::initTextureFromString(size2, G.Heros.texture2);
- 
+	V2 size2;
+	G.Heros.IdTex2 = G2D::initTextureFromString(size2, G.Heros.texture2);
 
 
-   for (int i = 0; i < 3; i++)
-   {
-	   V2 momieSize;
-	   G.Fantome[i].IdTex = G2D::initTextureFromString(momieSize, G.Fantome[i].texture[i]);
-	   G.Fantome[i].Size = V2(G.Lpix * 0.8f, G.Lpix * 0.8f);
-   }
+
+	for (int i = 0; i < 3; i++)
+	{
+		V2 momieSize;
+		G.Fantome[i].IdTex = G2D::initTextureFromString(momieSize, G.Fantome[i].texture[i]);
+		G.Fantome[i].Size = V2(G.Lpix * 0.8f, G.Lpix * 0.8f);
+	}
 
 }
 
 int main(int argc, char* argv[])
-{ 
+{
 	GameData G;
 
-	G2D::initWindow(V2(G.Lpix * G.NbColonnes, G.Lpix * G.NbLignes), V2(200,200), string("Labyrinthe"));
-	  
+	G2D::initWindow(V2(G.Lpix * G.NbColonnes, G.Lpix * G.NbLignes), V2(200, 200), string("Labyrinthe"));
+
 	AssetsInit(G);
 
 	int nbCalltoLogicPerSec = 50;
 
-	G2D::Run(Logic,Render,G, nbCalltoLogicPerSec,true);
- 
+	G2D::Run(Logic, Render, G, nbCalltoLogicPerSec, true);
+
 }
- 
