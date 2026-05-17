@@ -10,7 +10,7 @@ using namespace std;
 
 // Enum & const
 enum class Ecran { Accueil, InitPartie, Jeu, GameOver, Win };
-enum class TypeFantome { Crimson, Berry, Azure, Total };
+enum class TypeFantome { Crimson, Azure, Berry, Total };
 const int NB_FANTOMES = static_cast<int>(TypeFantome::Total);
 const int NB_LIGNES = 15; 
 const int NB_COLONNES = 20; 
@@ -159,13 +159,13 @@ struct GameData
 	{
 		// initialise les positions de départ des fantômes
 		FantomeStartPos[static_cast<int>(TypeFantome::Crimson)] = V2(3 * Lpix, 13 * Lpix);
-		FantomeStartPos[static_cast<int>(TypeFantome::Berry)] = V2(17 * Lpix, 13 * Lpix);
-		FantomeStartPos[static_cast<int>(TypeFantome::Azure)] = V2(17 * Lpix, 1 * Lpix);
+		FantomeStartPos[static_cast<int>(TypeFantome::Azure)] = V2(17 * Lpix, 13 * Lpix);
+		FantomeStartPos[static_cast<int>(TypeFantome::Berry)] = V2(17 * Lpix, 1 * Lpix);
 
 		// Directions initiales
 		FantomeStartDir[static_cast<int>(TypeFantome::Crimson)] = V2(1, 0);
-		FantomeStartDir[static_cast<int>(TypeFantome::Berry)] = V2(0, 1);
-		FantomeStartDir[static_cast<int>(TypeFantome::Azure)] = V2(-1, 0);
+		FantomeStartDir[static_cast<int>(TypeFantome::Azure)] = V2(0, 1);
+		FantomeStartDir[static_cast<int>(TypeFantome::Berry)] = V2(-1, 0);
 	}
 
 };
@@ -531,7 +531,7 @@ void Render(const GameData& G)
 	int x = (largeurFenetre - largeurRect) / 2;
 
 	// Centre vertical
-	int y = (hauteurFenetre - hauteurRect) / 2;
+	int y = (hauteurFenetre - hauteurRect) / 2; // pour les écrans GameOver et Win
 	int y1 = hauteurFenetre / 2;        // rectangle titre
 	int y2 = hauteurFenetre / 2 - 80;  // rectangle bouton en dessous
 
@@ -540,10 +540,10 @@ void Render(const GameData& G)
 
 	{	// Fonds des rectangles
 		G2D::drawRectangle(V2(x, y1 - hauteurRect1 / 2), V2(largeurRect, hauteurRect1), Color::White, true);
-		G2D::drawRectangle(V2(x, y2 - hauteurRect2 / 2), V2(largeurRect, hauteurRect2), Color::Gray, true);
+		G2D::drawRectangle(V2(x, y2 - hauteurRect2 / 2), V2(largeurRect, hauteurRect2), Color::Cyan, true);
 
 		// Texte centré dans le rectangle blanc
-		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 80, y1 - 10), "LABYRINTHE", 25, 3, Color::Black);
+		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 80, y1 - 10), "Gold Rush", 30, 4, Color::Black);
 
 		// Texte centré dans le rectangle magenta  
 		G2D::drawStringFontMono(V2(x + largeurRect / 2 - 80, y2 - 8), "ENTREE to play", 18, 2, Color::Black);
