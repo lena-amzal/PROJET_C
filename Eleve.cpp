@@ -102,6 +102,8 @@ struct _Fantome
 	int IdTex;
 	V2 Pos;
 	V2 Dir;
+	V2 dernierePos = V2(0,0);
+	int framesImmobile = 0;
 };
 
 
@@ -130,20 +132,27 @@ struct GameData
 	bool Mur(int x, int y) const { return Map[(NB_LIGNES - y - 1) * NB_COLONNES + x] == 'M'; }
 
 	// largeur en pixels des cases du labyrinthe
-	int Lpix = 40;  
+	int Lpix = 40;
+
 	// données du héros et des fantômes
 	_Heros Heros; 
 	_Fantome Fantome[NB_FANTOMES]; 
 	V2 FantomeStartPos[NB_FANTOMES];
 	V2 FantomeStartDir[NB_FANTOMES];
 
-    double TimeEcran = 0.0;
-	int FrameCount = 0;
     Ecran EcranActuel = Ecran::Accueil;
+
     vector<vector<bool>> Pieces;
+
 	vector<vector<bool>> Bonus;
+
 	bool Invincible = false;
+
 	double TimeInvincible = 0;
+
+	double TimeEcran = 0.0;
+
+	int FrameCount = 0;
 
 
 	GameData()
@@ -162,7 +171,7 @@ struct GameData
 };
 
 
-// indique collision et position valide pour le héros
+// indique collision
 
 bool CollisionRectRect(V2 r1, V2 s1, V2 r2, V2 s2)
 {
@@ -173,6 +182,7 @@ bool CollisionRectRect(V2 r1, V2 s1, V2 r2, V2 s2)
 	return true;
 }
 
+ // indique la position valide
 
 bool PositionValide(const GameData& G, V2 pos, V2 taille)
 {
@@ -193,7 +203,7 @@ bool PositionValide(const GameData& G, V2 pos, V2 taille)
 void GestionDeplacementHeros(GameData& G)
 {
 	V2 newPos = G.Heros.Pos;
-	float speed = 2;
+	float speed = 2.80;
 	bool enMouvement = false;
 
 	if (G2D::isKeyPressed(Key::RIGHT)) { newPos.x += speed; G.Heros.Dir = V2(1, 0);  enMouvement = true; }
@@ -225,7 +235,7 @@ void GestionMortHeros(GameData& G)
 
 
 
-//collision Fantomes
+//collision fantômes
 
 void GestionCollisionFantomes(GameData& G)
 {
@@ -235,7 +245,7 @@ void GestionCollisionFantomes(GameData& G)
 		{
             if (G.Invincible)
 			{
-				// teleport ghost back to its centralized start position
+				// téléporte le fantôme à sa position de départ
 				G.Fantome[i].Pos = G.FantomeStartPos[i];
 				G.Fantome[i].Dir = V2(1, 0);
 			}
@@ -248,33 +258,45 @@ void GestionCollisionFantomes(GameData& G)
 	}
 }
 
-//IA des fantômes
-
+// IA des fantômes
 
 void DeplacementFantomes(GameData& G, _Fantome& M, TypeFantome type)
 {
 	float speed = 2.0f;
 
+	// Détection blocage
+	float dx = M.Pos.x - M.dernierePos.x;
+	float dy = M.Pos.y - M.dernierePos.y;
+	bool aBouge = (dx * dx + dy * dy) > 0.1f;
+
+	if (!aBouge)
+		M.framesImmobile++;
+	else
+		M.framesImmobile = 0;
+
+	M.dernierePos = M.Pos;
+
+	if (M.framesImmobile >= 20)
+	{
+		M.framesImmobile = 0;
+		M.Pos = G.FantomeStartPos[static_cast<int>(type)];
+		M.Dir = G.FantomeStartDir[static_cast<int>(type)];
+		return;
+	}
+
+	// Calcul de la cible
 	V2 cible = G.Heros.Pos;
 
-	if (type == TypeFantome::Crimson)  // Crimson suit exactement le héros
-		cible = G.Heros.Pos;
-
-	if (type == TypeFantome::Berry)  // Berry arrive devant le héros
+	if (type == TypeFantome::Berry)
 		cible = G.Heros.Pos + G.Heros.Dir * 4 * G.Lpix;
 
-	if (type == TypeFantome::Azure)  // Azure arrive derrière le héros
+	if (type == TypeFantome::Azure)
 		cible = G.Heros.Pos - G.Heros.Dir * 4 * G.Lpix;
 
-	V2 dirs[4] =
-	{
-		V2(0,1),
-		V2(1,0),
-		V2(0,-1),
-		V2(-1,0)
-	};
+	V2 dirs[4] = { V2(0,1), V2(1,0), V2(0,-1), V2(-1,0) };
 
 	V2 bestDir = M.Dir;
+	bool dirTrouvee = false;
 
 	if (G.Invincible)
 	{
@@ -282,54 +304,47 @@ void DeplacementFantomes(GameData& G, _Fantome& M, TypeFantome type)
 
 		for (int i = 0; i < 4; i++)
 		{
-			V2 dir = dirs[i];
+			V2 newPos = M.Pos + dirs[i] * speed;
+			if (!PositionValide(G, newPos, M.Size)) continue;
 
-			V2 newPos = M.Pos + dir * speed;
-
-			if (!PositionValide(G, newPos, M.Size))
-				continue;
-
-			float dx = cible.x - newPos.x;
-			float dy = cible.y - newPos.y;
-
-			float dist = dx * dx + dy * dy;
+			float ddx = cible.x - newPos.x;
+			float ddy = cible.y - newPos.y;
+			float dist = ddx * ddx + ddy * ddy;
 
 			if (dist > bestDist)
 			{
 				bestDist = dist;
-				bestDir = dir;
+				bestDir = dirs[i];
+				dirTrouvee = true;
 			}
 		}
 	}
 	else
 	{
-
 		float bestDist = 999999.f;
 
 		for (int i = 0; i < 4; i++)
 		{
-			V2 dir = dirs[i];
+			if (dirs[i].x == -M.Dir.x && dirs[i].y == -M.Dir.y) continue;
 
-			if (dir.x == -M.Dir.x && dir.y == -M.Dir.y)
-				continue;
+			V2 newPos = M.Pos + dirs[i] * speed;
+			if (!PositionValide(G, newPos, M.Size)) continue;
 
-			V2 newPos = M.Pos + dir * speed;
-
-			if (!PositionValide(G, newPos, M.Size))
-				continue;
-
-			float dx = cible.x - newPos.x;
-			float dy = cible.y - newPos.y;
-
-			float dist = dx * dx + dy * dy;
+			float ddx = cible.x - newPos.x;
+			float ddy = cible.y - newPos.y;
+			float dist = ddx * ddx + ddy * ddy;
 
 			if (dist < bestDist)
 			{
 				bestDist = dist;
-				bestDir = dir;
+				bestDir = dirs[i];
+				dirTrouvee = true;
 			}
 		}
 	}
+
+	if (!dirTrouvee)
+		bestDir = V2(-M.Dir.x, -M.Dir.y);
 
 	M.Dir = bestDir;
 	M.Pos = M.Pos + M.Dir * speed;
@@ -408,6 +423,7 @@ Ecran InitPartie(GameData& G)
 	{
 		G.Fantome[i].Pos = G.FantomeStartPos[i];
 		G.Fantome[i].Dir = G.FantomeStartDir[i];
+		G.Fantome[i].dernierePos = G.FantomeStartPos[i];
 	}
 
 	G.FrameCount = 0;
@@ -649,7 +665,7 @@ int main(int argc, char* argv[])
 {
 	GameData G;
 
-    G2D::initWindow(V2(G.Lpix * NB_COLONNES, G.Lpix * NB_LIGNES + 70), V2(200, 200), string("Labyrinthe"));
+    G2D::initWindow(V2(G.Lpix * NB_COLONNES, G.Lpix * NB_LIGNES + 70), V2(200, 200), string("Gold Rush"));
 
 	AssetsInit(G);
 
